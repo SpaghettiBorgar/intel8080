@@ -4,6 +4,9 @@
 #include <stdio.h>
 #include <errno.h>
 
+#include "disassembler.h"
+
+
 //#define useregisters
 
 typedef int bool;
@@ -152,7 +155,7 @@ int main(int argc, char *argv[])
 		return -1;
 	} 
 
-	ssize_t programsize = read(fd, mem, 0xFFFF);
+	ssize_t programsize = 0x100 + read(fd, &mem[0x100], 0x10000 - 0x100);
 	if(programsize < 0)
 	{
 		perror("Error Reading file");
@@ -162,14 +165,21 @@ int main(int argc, char *argv[])
 
 	printf("Read %zd bytes\n", programsize);
 
-	PC = SP = A = F = B = C = D = E = H = L = 0;
+	SP = A = F = B = C = D = E = H = L = 0;
+	PC = 0x100;
 
 	bool running = true;
 
 	while(running && PC < programsize)
 	{
-		
-		switch(mem[PC++])
+		uint8_t instruction = mem[PC];
+		char strbuf[20];
+		instructionToString(strbuf, mem, PC);
+		printf("%04X: %s\n", PC, strbuf);
+
+		++PC;
+
+		switch(instruction)
 		{
 			opc(0x00, NOP());
 			opc(0x01, LXI(BC));
@@ -430,6 +440,8 @@ int main(int argc, char *argv[])
 		}
 
 	}
+
+	printf("Program terminated\n");
 
 	return 0;
 }

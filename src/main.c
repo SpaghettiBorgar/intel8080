@@ -7,59 +7,36 @@
 
 #include "disassembler.h"
 #include "architecture.h"
+#include "cpu.h"
+#include "debugger.h"
 
 uint16_t tmp;
-uint8_t mem[0x10000];
-uint8_t ports[0x100];
-bool interrupts_enabled = true;
+CPU cpu;
 
 int main(int argc, char *argv[])
-{
-	printf("Entering\n");
-	
+{	
 	if(argc < 2)
 	{
 		printf("Usage: %s <file>\n", argv[0]);
 		return -1;
 	}
 	
-	int fd = open(argv[1], O_RDONLY);
-	if(fd < 0)
-	{
-		perror("Error Opening file");
+	if(initCPU(&cpu, 0x10000) < 0)
 		return -1;
-	} 
+	printf("CPU initialized\n");
 
-	ssize_t programsize = 0x100 + read(fd, &mem[0x100], 0x10000 - 0x100);
+	uint16_t programstart = 0x100;
+
+	printf("Loading Program %s\n", argv[1]);
+	int programsize = loadBinary(&cpu, argv[1], programstart);
 	if(programsize < 0)
-	{
-		perror("Error Reading file");
 		return -1;
-	}
-	close(fd);
+	printf("read %zd bytes\n", programsize);
 
-	printf("Read %zd bytes\n", programsize);
+	printf("Starting Debugger at entrypoint %d", programstart);
+	runDebugger(&cpu, programstart);
 
-	SP = A = B = C = D = E = H = L = 0;
-	F = FLAGS_INIT;
-	PC = 0x100;
-
-	bool running = true;
-
-	while(running && PC < programsize)
-	{
-		uint8_t instruction = mem[PC];
-		char strbuf[20];
-		instructionToString(strbuf, mem, PC);
-		printf("%04X: %s\n", PC, strbuf);
-
-		++PC;
-
-		instruction_switch
-
-	}
-
-	printf("Program terminated\n");
+	printf("CPU halted\n");
 
 	return 0;
 }

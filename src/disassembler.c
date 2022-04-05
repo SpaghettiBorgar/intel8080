@@ -11,6 +11,6 @@ int instructionToString(char* buf, uint8_t* mem, int addr)
 		case 2:
 			return sprintf(buf, "%s 0x%02X", DISASSEMBLY_TABLE[opcode], mem[addr + 1]);
 		case 3:
-			return sprintf(buf, "%s 0x%02X 0x%02X", DISASSEMBLY_TABLE[opcode], mem[addr + 1], mem[addr + 1]);
+			return sprintf(buf, "%s 0x%02X 0x%02X", DISASSEMBLY_TABLE[opcode], mem[addr + 1], mem[addr + 2]);
 	}
 }

@@ -33,7 +33,7 @@ int main(int argc, char *argv[])
 		return -1;
 	printf("read %zd bytes\n", programsize);
 
-	printf("Starting Debugger at entrypoint %d", programstart);
+	printf("Starting Debugger at entrypoint %d\n", programstart);
 	runDebugger(&cpu, programstart);
 
 	printf("CPU halted\n");

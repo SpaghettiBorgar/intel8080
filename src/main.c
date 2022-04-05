@@ -40,7 +40,8 @@ int main(int argc, char *argv[])
 
 	printf("Read %zd bytes\n", programsize);
 
-	SP = A = F = B = C = D = E = H = L = 0;
+	SP = A = B = C = D = E = H = L = 0;
+	F = FLAGS_INIT;
 	PC = 0x100;
 
 	bool running = true;

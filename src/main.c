@@ -3,15 +3,12 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <errno.h>
+#include <stdbool.h>
 
 #include "disassembler.h"
 
 
 //#define useregisters
-
-typedef int bool;
-#define true 1
-#define false 0
 
 #ifdef useregisters
 register uint_fast8_t PC asm ("r12");

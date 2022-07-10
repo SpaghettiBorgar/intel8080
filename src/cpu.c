@@ -3,8 +3,10 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdio.h>
 #include "cpu.h"
 #include "architecture.h"
+#include "bios.h"
 
 int initCPU(CPU* cpu, uint32_t memsize)
 {
@@ -54,6 +56,37 @@ int loadBinary(CPU* cpu, char* path, uint16_t offset)
 	return programsize;
 }
 
+void portIn(CPU* cpu, uint8_t num)
+{
+	printf("IN %02X <- %02X\n", num, cpu->ports[num]);
+}
+
+void portOut(CPU* cpu, uint8_t num)
+{
+	switch(num)
+	{
+		case 1:
+			putchar(cpu->ports[1]);
+			fflush(stdout);
+			break;
+		default:
+			printf("OUT %02X -> %02X\n", num, cpu->ports[num]);
+	}
+}
+
+void hook(CPU* cpu, uint16_t addr)
+{
+	switch(addr)
+	{
+		case 0x0005:
+			if(cpu->C == 0x09)
+				printString(cpu, addr);
+			break;
+		default:
+			printf("Special return used at %04X\n", addr);
+	}
+}
+
 void executeInstruction(CPU* cpu, uint8_t instruction)
 {
 	#define mem cpu->mem
@@ -70,7 +103,10 @@ void executeInstruction(CPU* cpu, uint8_t instruction)
 	#define H cpu->H
 	#define L cpu->L
 	#define running cpu->running
-
+	#define _portIn(num) portIn(cpu, num);
+	#define _portOut(num) portOut(cpu, num);
+	#define _hook(addr) hook(cpu, addr)
+	
 		instruction_switch
 
 	#undef mem
@@ -87,4 +123,13 @@ void executeInstruction(CPU* cpu, uint8_t instruction)
 	#undef H
 	#undef L
 	#undef running
+	#undef _portIn
+	#undef _portOut
+	#undef _hook
+}
+
+void injectSyscalls(CPU* cpu)
+{
+	// Inject a non-standard return instructiona (0xD9: RET*) so it behaves just like a normal return except we know we should check if a syscall was done
+	cpu->mem[0x0005] = 0xD9;
 }

@@ -36,3 +36,5 @@ int initCPU(CPU* cpu, uint32_t memsize);
 int loadBinary(CPU* cpu, char* path, uint16_t offset);
 
 void executeInstruction(CPU* cpu, uint8_t instruction);
+
+void injectSyscalls(CPU* cpu);

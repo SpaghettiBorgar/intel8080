@@ -14,7 +14,7 @@ uint16_t tmp;
 CPU cpu;
 
 int main(int argc, char *argv[])
-{	
+{
 	if(argc < 2)
 	{
 		printf("Usage: %s <file>\n", argv[0]);
@@ -32,6 +32,9 @@ int main(int argc, char *argv[])
 	if(programsize < 0)
 		return -1;
 	printf("read %zd bytes\n", programsize);
+
+	printf("Injecting CP/M syscall emulation\n");
+	injectSyscalls(&cpu);
 
 	printf("Starting Debugger at entrypoint %d\n", programstart);
 	runDebugger(&cpu, programstart);

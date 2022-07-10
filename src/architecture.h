@@ -32,47 +32,48 @@
 #define CMP(S)		{ uint16_t tmp = A + ~S; F &= ~(FLAG_CARRY | FLAG_AUXC); F |= (tmp <= 0xFF) | ((tmp ^ A ^ ~S) & 0x10); SZP(tmp); }
 #define RNZ()		{ if(!(F & FLAG_ZERO)) RET(); }
 #define POP(RP)		{ RP(mem[_SP] | mem[_SP + 1] << 8); _SP += 2; }
-#define JNZ()		{ if(!(F & FLAG_ZERO)) JMP(); }
+#define JNZ()		{ if(!(F & FLAG_ZERO)) JMP() else PC += 2; }
 #define JMP()		{ PC = mem[PC] | mem[PC + 1] << 8; }
 #define CNZ()		{ if(!(F & FLAG_ZERO)) CALL(); }
 #define PUSH(RP)	{ mem[_SP - 2] = RP##_ & 0xFF; mem[_SP - 1] = RP##_ >> 8; _SP -= 2; }
-#define ADI()		{ ADD(mem[++PC]); }
+#define ADI()		{ ADD(mem[PC]); ++PC; }
 #define RST(N)		{ mem[_SP - 1] = PC >> 8; mem[_SP - 2] = PC & 0xFF; _SP -= 2; PC = 0x08 * N; }
 #define RZ()		{ if(F & FLAG_ZERO) RET(); }
 #define RET()		{ PC = mem[_SP] | mem[_SP + 1] << 8; _SP += 2; }
-#define JZ()		{ if(F & FLAG_ZERO) JMP(); }
+#define RET_X()		{ _hook(PC - 1); RET(); }	// special ret instruction used to hook potential syscall emulations
+#define JZ()		{ if(F & FLAG_ZERO) JMP() else PC += 2; }
 #define CZ()		{ if(F & FLAG_ZERO) CALL(); }
-#define CALL()		{ mem[_SP - 1] = PC >> 8; mem[_SP - 2] = PC & 0xFF; _SP -= 2; JMP(); }
+#define CALL()		{ PC += 2; mem[_SP - 1] = PC >> 8; mem[_SP - 2] = PC & 0xFF; _SP -= 2; PC -= 2; JMP(); }
 #define ACI()		{ ADC(mem[++PC]); }
 #define RNC()		{ if(!(F & FLAG_CARRY)) RET(); }
-#define JNC()		{ if(!(F & FLAG_CARRY)) JMP(); }
-#define OUT()		{ ports[mem[++PC]] = A; }
+#define JNC()		{ if(!(F & FLAG_CARRY)) JMP() else PC += 2; }
+#define OUT()		{ ports[mem[PC]] = A; _portOut(mem[PC++]); }
 #define CNC()		{ if(!(F & FLAG_CARRY)) CALL(); }
-#define SUI()		{ SUB(mem[++PC]); }
+#define SUI()		{ SUB(mem[PC]); ++PC; }
 #define RC()		{ if(F & FLAG_CARRY) RET(); }
-#define JC()		{ if(F & FLAG_CARRY) JMP(); }
-#define IN()		{ A = ports[mem[++PC]]; }
+#define JC()		{ if(F & FLAG_CARRY) JMP() else PC += 2; }
+#define IN()		{ _portIn(mem[PC]); A = ports[mem[PC++]]; }
 #define CC()		{ if(F & FLAG_CARRY) CALL(); }
 #define SBI()		{ SBB(mem[++PC]); }
 #define RPO()		{ if(F & FLAG_PARITY) RET(); }
-#define JPO()		{ if(F & FLAG_PARITY) JMP(); }
+#define JPO()		{ if(F & FLAG_PARITY) JMP() else PC += 2; }
 #define XTHL()		{ uint16_t tmp = _SP; _SP = HL_; HL(tmp); }
 #define CPO()		{ if(F & FLAG_PARITY) CALL(); }
 #define ANI()		{ A &= mem[++PC]; F = F & ~(FLAG_CARRY | FLAG_AUXC); SZP(A); }
 #define RPE()		{ if(!(F & FLAG_PARITY)) RET(); }
 #define PCHL()		{ uint16_t tmp = PC; PC = HL_; HL(tmp); }
-#define JPE()		{ if(!(F & FLAG_PARITY)) JMP(); }
+#define JPE()		{ if(!(F & FLAG_PARITY)) JMP() else PC += 2; }
 #define XCHG()		{ uint16_t tmp = HL_; HL(DE_); DE(tmp); }
 #define CPE()		{ if(!(F & FLAG_PARITY)) CALL(); }
 #define XRI()		{ A ^= mem[++PC]; F = F & ~(FLAG_CARRY | FLAG_AUXC); SZP(A); }
 #define RP()		{ if(!(F & FLAG_SIGN)) RET(); }
-#define JP()		{ if(!(F & FLAG_SIGN)) JMP(); }
+#define JP()		{ if(!(F & FLAG_SIGN)) JMP() else PC += 2; }
 #define DI()		{ interrupts_enabled = false; }
 #define CP()		{ if(!(F & FLAG_SIGN)) CALL(); }
 #define ORI()		{ A |= mem[++PC]; F = F & ~(FLAG_CARRY | FLAG_AUXC); SZP(A); }
 #define RM()		{ if(F & FLAG_SIGN) RET(); }
 #define SPHL()		{ SP(HL_); }
-#define JM()		{ if(F & FLAG_SIGN) JMP(); }
+#define JM()		{ if(F & FLAG_SIGN) JMP() else PC += 2; }
 #define EI()		{ interrupts_enabled = true; }
 #define CM()		{ if(F & FLAG_SIGN) CALL(); }
 #define CPI()		{ CMP(mem[++PC]); }
@@ -96,7 +97,7 @@
 #define FLAG_PARITY	0b00000100
 #define FLAG_CARRY	0b00000001
 
-#define SZP(R)	{ F = (F & ~(FLAG_SIGN | FLAG_ZERO | FLAG_PARITY)) | (R & 0b10000000) | (R == 0) << 6 | (1 ^ R ^ R>>1 ^ R>>2 ^ R>>3 ^ R>>4 ^ R>>5 ^ R>>6 ^ R>>7) & 1;}
+#define SZP(R)	{ F = (F & ~(FLAG_SIGN | FLAG_ZERO | FLAG_PARITY)) | (R & 0b10000000) | (R == 0) << 6 | ((R ^ R>>1 ^ R>>2 ^ R>>3 ^ R>>4 ^ R>>5 ^ R>>6 ^ R>>7) & 1) << 2; }
 
 #define opc(code, instr)	case code: instr; break;
 
@@ -320,7 +321,7 @@
 		opc(0xd6, SUI()); \
 		opc(0xd7, RST(2)); \
 		opc(0xd8, RC()); \
-		opc(0xd9, RET()); \
+		opc(0xd9, RET_X()); \
 		opc(0xda, JC()); \
 		opc(0xdb, IN()); \
 		opc(0xdc, CC()); \

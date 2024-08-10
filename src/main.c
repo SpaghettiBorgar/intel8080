@@ -37,7 +37,7 @@ int main(int argc, char *argv[])
 	injectSyscalls(&cpu);
 
 	printf("Starting Debugger at entrypoint %d\n", programstart);
-	runDebugger(&cpu, programstart);
+	runDebugger(&cpu, programstart, true);
 
 	printf("CPU halted\n");
 

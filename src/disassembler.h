@@ -29,7 +29,7 @@ static const char* DISASSEMBLY_TABLE[0x100] = {
 /* Cx */  "RNZ",      "POP B",    "JNZ",      "JMP",      "CNZ",     "PUSH B",   "ADI",      "RST 0",
           "RZ",       "RET",      "JZ",       "NOP*",     "CZ",      "CALL",     "ACI",      "RST 1",
 /* Dx */  "RNC",      "POP D",    "JNC",      "OUT",      "CNC",     "PUSH D",   "SUI",      "RST 2",
-          "RC",       "NOP*",     "JC",       "IN",       "CC",      "NOP*",     "SBI",      "RST 3",
+          "RC",       "RET*",     "JC",       "IN",       "CC",      "NOP*",     "SBI",      "RST 3",
 /* Ex */  "RPO",      "POP H",    "JPO",      "XTHL",     "CPO",     "PUSH H",   "ANI",      "RST 4",
           "RPE",      "PCHL",     "JPE",      "XCHG",     "CPE",     "NOP*",     "XRI",      "RST 5",
 /* Fx */  "RP",       "POP PSW",  "JP ",      "DI",       "CP",      "PUSH PSW", "ORI",      "RST 6",
@@ -74,4 +74,6 @@ static const uint8_t INSTRUCTION_CYCLES[0x100] = {
 	5,  10, 10, 4,  11, 11, 7,  11, 5,  5,  10, 4,  11, 17, 7,  11 
 };
 
-int instructionToString(char* buf, uint8_t* mem, int addr);
+void instructionToString(char* buf, uint8_t* mem, uint16_t addr);
+
+void printDisassemble(uint8_t* mem, uint16_t startAddr, uint16_t endAddr);

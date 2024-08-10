@@ -1,3 +1,4 @@
+#include <stdint.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <unistd.h>
@@ -10,10 +11,14 @@
 #include "debugger.h"
 #include "cpu.h"
 #include "disassembler.h"
+#include "util/hashset.h"
 
-bool stepping = true;
+bool stepping;
 volatile bool interrupted = false;
 CPU* _cpu;
+#define MAX_BREAKPOINTS 0x100
+Breakpoint breakpoints[MAX_BREAKPOINTS];
+uint16_t numBreakpoints;
 
 void handleInterrupt(int _)
 {
@@ -44,9 +49,48 @@ char* trim(char* str)
 	return str;
 }
 
-int runDebugger(CPU* cpu, uint16_t entrypoint)
+int parseRange(char* str, long* a, long* b, int base)
 {
+	if(str == NULL || *str == '\0')
+		return -1;
+	
+	char* srange1 = trim(strtok(str, "-"));
+	char* srange2 = trim(strtok(NULL, ""));
+	char* invalid1 = NULL;
+	char* invalid2 = NULL;
+
+	errno = 0;
+	*a = strtol(srange1, &invalid1, base);
+	if(srange2 != NULL && *srange2 != '\0')
+	{
+		*b = strtol(srange2, &invalid2, base);
+		invalid2 = "";
+	}
+	else
+	{
+		*b = *a;
+	}
+
+	if(invalid1 == NULL || *invalid1 != '\0' || invalid2 == NULL || *invalid2 != '\0')
+	{
+		return -1;
+	}
+	else if(errno != 0)
+	{
+		perror("strtol");
+		return -1;
+	}
+	else
+	{
+		return 0;
+	}
+}
+
+int runDebugger(CPU* cpu, uint16_t entrypoint, bool stopAtEntry)
+{
+	stepping = stopAtEntry;
 	_cpu = cpu;
+
 	signal(SIGINT, handleInterrupt);
 
 	_cpu->PC = entrypoint;
@@ -59,7 +103,7 @@ int runDebugger(CPU* cpu, uint16_t entrypoint)
 			interrupted = false;
 			char strbuf[20];
 			instructionToString(strbuf, _cpu->mem, _cpu->PC);
-			printf("%04X: %s\n", _cpu->PC, strbuf);
+			printf("%04lX: %s\n", _cpu->PC, strbuf);
 
 			if(interrupted)
 				printf("Interrupted. Press ^C again to quit\n");
@@ -82,11 +126,12 @@ int runDebugger(CPU* cpu, uint16_t entrypoint)
 
 				if(strcmp(cmd, "") == 0 || strcmp(cmd, "s") == 0 || strcmp(cmd, "step") == 0)
 				{
-					step();
+					break;
 				}
 				else if(strcmp(cmd, "c") == 0 || strcmp(cmd, "cont") == 0)
 				{
 					cont();
+					break;
 				}
 				else if(strcmp(cmd, "r") == 0 || strcmp(cmd, "reg") == 0)
 				{
@@ -133,10 +178,74 @@ int runDebugger(CPU* cpu, uint16_t entrypoint)
 				{
 					listCommands();
 				}
+				else if(strcmp(cmd, "b") == 0 || strcmp(cmd, "break") == 0)
+				{
+					char* on_off_s = trim(strtok(NULL, " \t"));
+					if(!on_off_s || on_off_s[0] == '\0')
+					{
+						printBreakpoints();
+						goto command_done;
+					}
+					bool on_off;
+					bool remove = false;
+					if(strcmp(on_off_s, "rm") == 0)
+					{
+						remove = true;
+					}
+					else if(strcmp(on_off_s, "on") == 0)
+						on_off = true;
+					else if(strcmp(on_off_s, "off") == 0)
+						on_off = false;
+					else
+					{
+						printf("Invalid arguments\n");
+						goto command_done;
+					}
+
+					char* addr_s = trim(strtok(NULL, " \t"));
+					char* invalid = NULL;
+					long addr = strtol(addr_s, &invalid, 16);
+					if(invalid == NULL || *invalid != '\0')
+						printf("Invalid Syntax");
+					else if(addr > USHRT_MAX || addr < 0)
+						printf("Address out of range");
+					else
+					{
+						if(remove)
+							removeBreakpoint(addr);
+						else
+							setBreakpoint((Breakpoint) {addr, on_off, trim(strtok(NULL, ""))});
+					}
+				}
+				else if(strcmp(cmd, "d") == 0 || strcmp(cmd, "disassemble"))
+				{
+					char * srange = trim(strtok(NULL, " \t\n"));
+					uint16_t rangeMin, rangeMax;
+					if(srange == NULL || *srange == '\0')
+						rangeMin = rangeMax = cpu->PC;
+					else
+					{
+						char* srangeMin = trim(strtok(srange, "-"));
+						char* srangeMax = trim(strtok(NULL, ""));
+						char* invalid1 = NULL;
+						char* invalid2 = NULL;
+
+						if(srangeMax != NULL)
+						{
+							rangeMin = strtol(srangeMin, &invalid1, 16);
+							rangeMax = strtol(srangeMax, &invalid2, 16);
+						}
+					}
+
+					printDisassemble(cpu->mem, rangeMin, rangeMax);
+				}
 				else
 				{
 					printf("Unknown command. Type 'help' for a list of commands\n");
 				}
+
+				command_done:
+				free(line);
 			}
 		}
 		
@@ -150,11 +259,13 @@ int runDebugger(CPU* cpu, uint16_t entrypoint)
 void listCommands()
 {
 	printf("List of available commands:\n");
-	printf("help/h \t\t Show list of commands\n");
-	printf("cont/c \t\t Continue program execution\n");
-	printf("step/s \t\t Step to next instruction\n");
-	printf("reg/r \t\t\t Show register content\n");
-	printf("mem/m <range>[=val] \t Read/Set Memory at specified range\n");
+	printf("help/h \t\t\t Show list of commands\n");
+	printf("cont/c \t\t\t Continue program execution\n");
+	printf("step/s \t\t\t Step to next instruction\n");
+	printf("reg/r \t\t\t\t Show register content\n");
+	printf("mem/m <range>[=val] \t\t Read/Set Memory at specified range\n");
+	printf("break/b <on/off/rm> <addr> [label] \t Set Breakpoint at address\n");
+	printf("disassemble/d <range> \t\t Disassemble Memory region\n");
 }
 
 void paus()
@@ -170,15 +281,24 @@ void cont()
 void step()
 {
 	uint8_t opcode = _cpu->mem[_cpu->PC];
+	Breakpoint* bp = getBreakpoint(_cpu->PC);
 	_cpu->PC++;
+	if(bp && !stepping)
+	{
+		stepping = true;
+		if(bp->label)
+			printf("[Breakpoint \"%s\"]\n", bp->label);
+		else
+		 	printf("[Breakpoint]\n");
+	}
 	executeInstruction(_cpu, opcode);
 }
 
 void printRegisters()
 {
 	printf("Currents register states:\n");
-	printf("PC=0x%04X\n", _cpu->PC);
-	printf("SP=0x%04X\n", _cpu->SP);
+	printf("PC=0x%04lX\n", _cpu->PC);
+	printf("SP=0x%04lX\n", _cpu->SP);
 	printf("A=0x%02X\tF=0x%02X\t(PSW)\n", _cpu->A, _cpu->F);
 	printf("B=0x%02X\tC=0x%02X\t(BC)\n", _cpu->B, _cpu->C);
 	printf("D=0x%02X\tE=0x%02X\t(DE)\n", _cpu->D, _cpu->E);
@@ -219,4 +339,69 @@ void setMemory(uint16_t min, uint16_t max, uint8_t val)
 		_cpu->mem[i] = val;
 	}
 	printMemory(min, max);
+}
+
+int _compareBreakpointsSearch(const void* a, const void* b)
+{
+	return *(uint16_t*)a - ((Breakpoint*)b)->addr;
+}
+
+int _compareBreakpointsSort(const void* a, const void* b)
+{
+	return ((Breakpoint*)a)->addr - ((Breakpoint*)b)->addr;
+}
+
+Breakpoint* getBreakpoint(uint16_t addr)
+{
+	return bsearch(&addr, breakpoints, numBreakpoints, sizeof(Breakpoint), &_compareBreakpointsSearch);
+}
+
+void setBreakpoint(Breakpoint bp)
+{
+	Breakpoint* entry = getBreakpoint(bp.addr);
+	if(!entry && numBreakpoints >= MAX_BREAKPOINTS)
+	{
+		printf("Breakpoint limit reached (%d)\n", numBreakpoints);
+		return;
+	}
+	if(entry)
+		entry->enabled = bp.enabled;
+	else
+	{
+		breakpoints[numBreakpoints] = (Breakpoint) {bp.addr, bp.enabled, NULL};
+		entry = &breakpoints[numBreakpoints++];
+	}
+	if(bp.label)
+	{
+		if(entry->label)
+			free(entry->label);
+		entry->label = malloc(strlen(bp.label + 1));
+		if(entry->label)
+			strcpy(entry->label, bp.label);
+	}
+
+	qsort(breakpoints, numBreakpoints, sizeof(Breakpoint), &_compareBreakpointsSort);
+
+}
+
+void removeBreakpoint(uint16_t addr)
+{
+	Breakpoint* bpp = getBreakpoint(addr);
+	if(!bpp)
+		return;
+	
+	free(bpp->label);
+	*bpp = breakpoints[numBreakpoints];
+	--numBreakpoints;
+	qsort(breakpoints, numBreakpoints, sizeof(Breakpoint), &_compareBreakpointsSort);
+}
+
+void printBreakpoints()
+{
+	printf("Breakpoints:\nAddr | En. | Label\n");
+	for(int i = 0; i < numBreakpoints; i++)
+	{
+		Breakpoint bp = breakpoints[i];
+		printf("%04X | %s   | %s\n", bp.addr, bp.enabled ? "*" : " ", bp.label ? bp.label : "");
+	}
 }

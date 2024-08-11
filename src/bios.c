@@ -3,6 +3,9 @@
 
 void printString(CPU* cpu, uint16_t addr)
 {
-	printf(&cpu->mem[(cpu->D << 8) | cpu->E]);
+	uint16_t str_addr = (cpu->D << 8) | cpu->E;
+	char c;
+	while ((c = cpu->mem[str_addr++]) != '$')
+		putc(c, stdout);
 	fflush(stdout);
 }

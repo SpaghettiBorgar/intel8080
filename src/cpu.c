@@ -8,6 +8,9 @@
 #include "architecture.h"
 #include "bios.h"
 
+uint8_t tmp8;
+uint16_t tmp16;
+
 int initCPU(CPU* cpu, uint32_t memsize)
 {
 	if(memsize > 0x10000)

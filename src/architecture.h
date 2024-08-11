@@ -5,16 +5,16 @@
 #define INR(D)		{ F = F & ~FLAG_AUXC | (D ^ D + 1) & FLAG_AUXC; ++D; SZP(D); }
 #define DCR(D)		{ F = F & ~FLAG_AUXC | (D ^ D - 1) & FLAG_AUXC; --D; SZP(D); }
 #define MVI(D)		{ D = mem[PC++]; }
-#define RLC()		{ uint16_t tmp = A << 1 | A >> 7; F = F & ~FLAG_CARRY | A >> 7; A = tmp; }
-#define DAD(RP)		{ uint16_t tmp = HL_; HL(HL_ + RP##_); F = F & ~FLAG_CARRY | tmp > HL_; }
+#define RLC()		{ tmp16 = A << 1 | A >> 7; F = F & ~FLAG_CARRY | A >> 7; A = tmp16; }
+#define DAD(RP)		{ tmp16 = HL_; HL(HL_ + RP##_); F = F & ~FLAG_CARRY | tmp16 > HL_; }
 #define LDAX(RP)	{ A = mem[RP##_]; }
 #define DCX(RP)		{ RP(RP##_ - 1); }
-#define RRC()		{ uint16_t tmp = A >> 1 | (A & 1) << 7; F = F & ~FLAG_CARRY | A & 1; A = tmp; }
-#define RAL()		{ uint16_t tmp = A << 1 | F & 1; F = F & ~FLAG_CARRY | A >> 7; A = tmp; }
-#define RAR()		{ uint16_t tmp = A >> 1 | (F & 1) << 7; F = F & ~FLAG_CARRY | A & 1; A = tmp; }
-#define SHLD()		{ uint16_t tmp = mem[PC] | mem[PC + 1] >> 8; mem[tmp] = L; mem[tmp + 1] = H; PC += 2; }
-#define DAA()		{ uint16_t tmp = F & FLAG_CARRY; ADD((F & FLAG_AUXC || (A & 0x0F) > 0x09) * 0x06 + (F & FLAG_CARRY || A > 0x9F || A >= 0x90 && (A & 0x0F) > 0x09) * 0x60); F = F & ~FLAG_CARRY | tmp; }
-#define LHLD()		{ uint16_t tmp = mem[PC] | mem[PC + 1] >> 8; L = mem[tmp]; H = mem[tmp + 1]; PC += 2; }
+#define RRC()		{ tmp16 = A >> 1 | (A & 1) << 7; F = F & ~FLAG_CARRY | A & 1; A = tmp16; }
+#define RAL()		{ tmp16 = A << 1 | F & 1; F = F & ~FLAG_CARRY | A >> 7; A = tmp16; }
+#define RAR()		{ tmp16 = A >> 1 | (F & 1) << 7; F = F & ~FLAG_CARRY | A & 1; A = tmp16; }
+#define SHLD()		{ tmp16 = mem[PC] | mem[PC + 1] >> 8; mem[tmp16] = L; mem[tmp16 + 1] = H; PC += 2; }
+#define DAA()		{ tmp16 = F & FLAG_CARRY; ADD((F & FLAG_AUXC || (A & 0x0F) > 0x09) * 0x06 + (F & FLAG_CARRY || A > 0x9F || A >= 0x90 && (A & 0x0F) > 0x09) * 0x60); F = F & ~FLAG_CARRY | tmp16; }
+#define LHLD()		{ tmp16 = mem[PC] | mem[PC + 1] >> 8; L = mem[tmp16]; H = mem[tmp16 + 1]; PC += 2; }
 #define CMA()		{ A = ~A; }
 #define STA()		{ mem[mem[PC] | mem[PC + 1] << 8] = A; PC += 2; }
 #define STC()		{ F |= FLAG_CARRY; }
@@ -22,19 +22,19 @@
 #define CMC()		{ F ^= FLAG_CARRY; }
 #define HLT()		{ running = false; }
 #define MOV(D,S)	{ D = S; }
-#define ADD(S)		{ uint16_t tmp = A + S; F &= ~(FLAG_CARRY | FLAG_AUXC); F |= (tmp > 0xFF) | ((tmp ^ A ^ S) & 0x10); A = tmp; SZP(A); }
+#define ADD(S)		{ tmp16 = A + S; F &= ~(FLAG_CARRY | FLAG_AUXC); F |= (tmp16 > 0xFF) | ((tmp16 ^ A ^ S) & 0x10); A = tmp16; SZP(A); }
 #define ADC(S)		{ ADD((S + (F & FLAG_CARRY))) }
-#define SUB(S)		{ ADD(~S); CMC(); }
-#define SBB(S)		{ ADD((~S + !(F & FLAG_CARRY))); CMC(); }
+#define SUB(S)		{ ADD(-S); }
+#define SBB(S)		{ ADD((-(S + (F & FLAG_CARRY)))); }
 #define ANA(S)		{ A &= S; F &= ~FLAG_CARRY; SZP(A); }
 #define XRA(S)		{ A ^= S; F &= ~FLAG_CARRY; SZP(A); }
 #define ORA(S)		{ A |= S; F &= ~FLAG_CARRY; SZP(A); }
-#define CMP(S)		{ uint16_t tmp = A + ~S; F &= ~(FLAG_CARRY | FLAG_AUXC); F |= (tmp <= 0xFF) | ((tmp ^ A ^ ~S) & 0x10); SZP(tmp); }
+#define CMP(S)		{ tmp16 = A - S; F &= ~(FLAG_CARRY | FLAG_AUXC); F |= (tmp16 > 0xFF) | ((tmp16 ^ A ^ ~S) & 0x10); tmp16 &= 0xFF; SZP(tmp16); }
 #define RNZ()		{ if(!(F & FLAG_ZERO)) RET(); }
 #define POP(RP)		{ RP(mem[_SP] | mem[_SP + 1] << 8); _SP += 2; }
 #define JNZ()		{ if(!(F & FLAG_ZERO)) JMP() else PC += 2; }
 #define JMP()		{ PC = mem[PC] | mem[PC + 1] << 8; }
-#define CNZ()		{ if(!(F & FLAG_ZERO)) CALL(); }
+#define CNZ()		{ if(!(F & FLAG_ZERO)) CALL() else PC += 2; }
 #define PUSH(RP)	{ mem[_SP - 2] = RP##_ & 0xFF; mem[_SP - 1] = RP##_ >> 8; _SP -= 2; }
 #define ADI()		{ ADD(mem[PC]); ++PC; }
 #define RST(N)		{ mem[_SP - 1] = PC >> 8; mem[_SP - 2] = PC & 0xFF; _SP -= 2; PC = 0x08 * N; }
@@ -42,41 +42,41 @@
 #define RET()		{ PC = mem[_SP] | mem[_SP + 1] << 8; _SP += 2; }
 #define RET_X()		{ _hook(PC - 1); RET(); }	// special ret instruction used to hook potential syscall emulations
 #define JZ()		{ if(F & FLAG_ZERO) JMP() else PC += 2; }
-#define CZ()		{ if(F & FLAG_ZERO) CALL(); }
+#define CZ()		{ if(F & FLAG_ZERO) CALL() else PC += 2; }
 #define CALL()		{ PC += 2; mem[_SP - 1] = PC >> 8; mem[_SP - 2] = PC & 0xFF; _SP -= 2; PC -= 2; JMP(); }
-#define ACI()		{ ADC(mem[++PC]); }
+#define ACI()		{ ADC(mem[PC]); ++PC; }
 #define RNC()		{ if(!(F & FLAG_CARRY)) RET(); }
 #define JNC()		{ if(!(F & FLAG_CARRY)) JMP() else PC += 2; }
 #define OUT()		{ ports[mem[PC]] = A; _portOut(mem[PC++]); }
-#define CNC()		{ if(!(F & FLAG_CARRY)) CALL(); }
+#define CNC()		{ if(!(F & FLAG_CARRY)) CALL() else PC += 2; }
 #define SUI()		{ SUB(mem[PC]); ++PC; }
 #define RC()		{ if(F & FLAG_CARRY) RET(); }
 #define JC()		{ if(F & FLAG_CARRY) JMP() else PC += 2; }
 #define IN()		{ _portIn(mem[PC]); A = ports[mem[PC++]]; }
-#define CC()		{ if(F & FLAG_CARRY) CALL(); }
-#define SBI()		{ SBB(mem[++PC]); }
-#define RPO()		{ if(F & FLAG_PARITY) RET(); }
-#define JPO()		{ if(F & FLAG_PARITY) JMP() else PC += 2; }
-#define XTHL()		{ uint16_t tmp = _SP; _SP = HL_; HL(tmp); }
-#define CPO()		{ if(F & FLAG_PARITY) CALL(); }
-#define ANI()		{ A &= mem[++PC]; F = F & ~(FLAG_CARRY | FLAG_AUXC); SZP(A); }
-#define RPE()		{ if(!(F & FLAG_PARITY)) RET(); }
-#define PCHL()		{ uint16_t tmp = PC; PC = HL_; HL(tmp); }
-#define JPE()		{ if(!(F & FLAG_PARITY)) JMP() else PC += 2; }
-#define XCHG()		{ uint16_t tmp = HL_; HL(DE_); DE(tmp); }
-#define CPE()		{ if(!(F & FLAG_PARITY)) CALL(); }
-#define XRI()		{ A ^= mem[++PC]; F = F & ~(FLAG_CARRY | FLAG_AUXC); SZP(A); }
+#define CC()		{ if(F & FLAG_CARRY) CALL() else PC += 2; }
+#define SBI()		{ SBB(mem[PC]); ++PC; }
+#define RPO()		{ if(!(F & FLAG_PARITY)) RET(); }
+#define JPO()		{ if(!(F & FLAG_PARITY)) JMP() else PC += 2; }
+#define XTHL()		{ tmp16 = _SP; _SP = HL_; HL(tmp16); }
+#define CPO()		{ if(!(F & FLAG_PARITY)) CALL() else PC += 2; }
+#define ANI()		{ A &= mem[PC++]; F = F & ~(FLAG_CARRY | FLAG_AUXC); SZP(A); }
+#define RPE()		{ if(F & FLAG_PARITY) RET(); }
+#define PCHL()		{ tmp16 = PC; PC = HL_; HL(tmp16); }
+#define JPE()		{ if(F & FLAG_PARITY) JMP() else PC += 2; }
+#define XCHG()		{ tmp16 = HL_; HL(DE_); DE(tmp16); }
+#define CPE()		{ if(F & FLAG_PARITY) CALL() else PC += 2; }
+#define XRI()		{ A ^= mem[PC++]; F = F & ~(FLAG_CARRY | FLAG_AUXC); SZP(A); }
 #define RP()		{ if(!(F & FLAG_SIGN)) RET(); }
 #define JP()		{ if(!(F & FLAG_SIGN)) JMP() else PC += 2; }
 #define DI()		{ interrupts_enabled = false; }
-#define CP()		{ if(!(F & FLAG_SIGN)) CALL(); }
-#define ORI()		{ A |= mem[++PC]; F = F & ~(FLAG_CARRY | FLAG_AUXC); SZP(A); }
+#define CP()		{ if(!(F & FLAG_SIGN)) CALL() else PC += 2; }
+#define ORI()		{ A |= mem[PC++]; F = F & ~(FLAG_CARRY | FLAG_AUXC); SZP(A); }
 #define RM()		{ if(F & FLAG_SIGN) RET(); }
 #define SPHL()		{ SP(HL_); }
 #define JM()		{ if(F & FLAG_SIGN) JMP() else PC += 2; }
 #define EI()		{ interrupts_enabled = true; }
-#define CM()		{ if(F & FLAG_SIGN) CALL(); }
-#define CPI()		{ CMP(mem[++PC]); }
+#define CM()		{ if(F & FLAG_SIGN) CALL() else PC += 2; }
+#define CPI()		{ tmp8 = mem[PC++]; CMP(tmp8); }
 
 #define M		mem[HL_]
 #define PSW_	( (A << 8) | F )
@@ -97,7 +97,7 @@
 #define FLAG_PARITY	0b00000100
 #define FLAG_CARRY	0b00000001
 
-#define SZP(R)	{ F = (F & ~(FLAG_SIGN | FLAG_ZERO | FLAG_PARITY)) | (R & 0b10000000) | (R == 0) << 6 | ((R ^ R>>1 ^ R>>2 ^ R>>3 ^ R>>4 ^ R>>5 ^ R>>6 ^ R>>7) & 1) << 2; }
+#define SZP(R)	{ F = (F & ~(FLAG_SIGN | FLAG_ZERO | FLAG_PARITY)) | (R & 0b10000000) | (R == 0) << 6 | !((R ^ R>>1 ^ R>>2 ^ R>>3 ^ R>>4 ^ R>>5 ^ R>>6 ^ R>>7) & 1) << 2; }
 
 #define opc(code, instr)	case code: instr; break;
 
@@ -132,9 +132,9 @@
 		opc(0x19, DAD(DE)); \
 		opc(0x1a, LDAX(DE)); \
 		opc(0x1b, DCX(DE)); \
-		opc(0x1c, INR(D)); \
-		opc(0x1d, DCR(D)); \
-		opc(0x1e, MVI(D)); \
+		opc(0x1c, INR(E)); \
+		opc(0x1d, DCR(E)); \
+		opc(0x1e, MVI(E)); \
 		opc(0x1f, RAR()); \
 		opc(0x20, NOP()); \
 		opc(0x21, LXI(HL)); \

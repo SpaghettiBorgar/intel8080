@@ -12,9 +12,9 @@
 #define RRC()		{ tmp16 = A >> 1 | (A & 1) << 7; F = F & ~FLAG_CARRY | A & 1; A = tmp16; }
 #define RAL()		{ tmp16 = A << 1 | F & 1; F = F & ~FLAG_CARRY | A >> 7; A = tmp16; }
 #define RAR()		{ tmp16 = A >> 1 | (F & 1) << 7; F = F & ~FLAG_CARRY | A & 1; A = tmp16; }
-#define SHLD()		{ tmp16 = mem[PC] | mem[PC + 1] >> 8; mem[tmp16] = L; mem[tmp16 + 1] = H; PC += 2; }
-#define DAA()		{ tmp16 = F & FLAG_CARRY; ADD((F & FLAG_AUXC || (A & 0x0F) > 0x09) * 0x06 + (F & FLAG_CARRY || A > 0x9F || A >= 0x90 && (A & 0x0F) > 0x09) * 0x60); F = F & ~FLAG_CARRY | tmp16; }
-#define LHLD()		{ tmp16 = mem[PC] | mem[PC + 1] >> 8; L = mem[tmp16]; H = mem[tmp16 + 1]; PC += 2; }
+#define SHLD()		{ tmp16 = mem[PC] | mem[PC + 1] << 8; mem[tmp16] = L; mem[tmp16 + 1] = H; PC += 2; }
+#define DAA()		{ tmp8 = F & FLAG_CARRY; ADD((F & FLAG_AUXC || (A & 0x0F) > 0x09) * 0x06 + ((F & FLAG_CARRY || A > 0x9F || A >= 0x90 && (A & 0x0F) > 0x09) && (tmp8 = 1)) * 0x60); F = F & ~FLAG_CARRY | tmp8; }
+#define LHLD()		{ tmp16 = mem[PC] | mem[PC + 1] << 8; L = mem[tmp16]; H = mem[tmp16 + 1]; PC += 2; }
 #define CMA()		{ A = ~A; }
 #define STA()		{ mem[mem[PC] | mem[PC + 1] << 8] = A; PC += 2; }
 #define STC()		{ F |= FLAG_CARRY; }
@@ -26,9 +26,9 @@
 #define ADC(S)		{ ADD((S + (F & FLAG_CARRY))) }
 #define SUB(S)		{ ADD(-S); }
 #define SBB(S)		{ ADD((-(S + (F & FLAG_CARRY)))); }
-#define ANA(S)		{ A &= S; F &= ~FLAG_CARRY; SZP(A); }
-#define XRA(S)		{ A ^= S; F &= ~FLAG_CARRY; SZP(A); }
-#define ORA(S)		{ A |= S; F &= ~FLAG_CARRY; SZP(A); }
+#define ANA(S)		{ A &= S; F &= ~(FLAG_CARRY | FLAG_AUXC); SZP(A); }
+#define XRA(S)		{ A ^= S; F &= ~(FLAG_CARRY | FLAG_AUXC); SZP(A); }
+#define ORA(S)		{ A |= S; F &= ~(FLAG_CARRY | FLAG_AUXC); SZP(A); }
 #define CMP(S)		{ tmp16 = A - S; F &= ~(FLAG_CARRY | FLAG_AUXC); F |= (tmp16 > 0xFF) | ((tmp16 ^ A ^ ~S) & 0x10); tmp16 &= 0xFF; SZP(tmp16); }
 #define RNZ()		{ if(!(F & FLAG_ZERO)) RET(); }
 #define POP(RP)		{ RP(mem[_SP] | mem[_SP + 1] << 8); _SP += 2; }
@@ -57,7 +57,7 @@
 #define SBI()		{ SBB(mem[PC]); ++PC; }
 #define RPO()		{ if(!(F & FLAG_PARITY)) RET(); }
 #define JPO()		{ if(!(F & FLAG_PARITY)) JMP() else PC += 2; }
-#define XTHL()		{ tmp16 = _SP; _SP = HL_; HL(tmp16); }
+#define XTHL()		{ tmp16 = HL_; HL(mem[_SP] | mem[_SP + 1] << 8); mem[_SP] = tmp16 & 0x00FF; mem[_SP + 1] = tmp16 >> 8; }
 #define CPO()		{ if(!(F & FLAG_PARITY)) CALL() else PC += 2; }
 #define ANI()		{ A &= mem[PC++]; F = F & ~(FLAG_CARRY | FLAG_AUXC); SZP(A); }
 #define RPE()		{ if(F & FLAG_PARITY) RET(); }

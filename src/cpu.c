@@ -133,6 +133,7 @@ void executeInstruction(CPU* cpu, uint8_t instruction)
 
 void injectSyscalls(CPU* cpu)
 {
+	cpu->mem[0x0000] = 0x76; //HLT
 	// Inject a non-standard return instructiona (0xD9: RET*) so it behaves just like a normal return except we know we should check if a syscall was done
 	cpu->mem[0x0005] = 0xD9;
 }
